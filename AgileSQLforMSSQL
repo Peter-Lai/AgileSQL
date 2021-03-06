@@ -1,0 +1,342 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Data;
+using System.Data.SqlClient;
+using System.Text;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Collections;
+
+
+namespace SQLHELP.App_Code
+{
+    public class SQLHELP
+    {
+        #region SQLHELP4MSSQL
+
+        private static string strConnection = System.Web.Configuration.WebConfigurationManager.ConnectionStrings["NorthwindConnectionString"].ToString();  //System.Configuration.ConfigurationManager.ConnectionStrings["PersonVerifyConnStr"].ToString();
+
+        
+
+        public static void QuerySQL(string sqlQuery)
+        {
+            SqlCommand sqlCmd = new SqlCommand(sqlQuery);
+            QuerySQL(sqlCmd);
+        }
+
+        #region QuerySQL
+        public static void QuerySQL(string sqlQuery, string ParameterName, object ParameterValue)
+        {
+            SqlCommand sqlCmd = new SqlCommand(sqlQuery);
+            sqlCmd.Parameters.AddWithValue(ParameterName, ParameterValue);
+            QuerySQL(sqlCmd);
+        }
+
+        public static void QuerySQL(string sqlQuery, string[] ParameterName, object[] ParameterValue)
+        {
+            SqlCommand sqlCmd = new SqlCommand(sqlQuery);
+            for (int i = 0; i < ParameterName.Count(); i++)
+            {
+                sqlCmd.Parameters.AddWithValue(ParameterName[i], ParameterValue[i]);
+            }
+            QuerySQL(sqlCmd);
+        }
+
+        public static void QuerySQL(SqlCommand sqlCmd)
+        {
+            try
+            {
+                using (SqlConnection connString = new SqlConnection(strConnection))
+                {
+                    //CmdSQL(connString, sqlCmd);
+                    sqlCmd.Connection = connString;
+                    connString.Open();
+                    try
+                    {
+                        sqlCmd.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        throw ex;
+                    }
+                    finally
+                    {
+                        connString.Close();
+                        connString.Dispose();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+
+        }
+
+        public static void QuerySQL(Queue<SqlCommand> sqlCmdQueue)
+        {
+            using (SqlConnection connString = new SqlConnection(strConnection))
+            {
+                SqlTransaction sqlTrans = null;
+
+                try
+                {
+                    connString.Open();
+                    sqlTrans = connString.BeginTransaction();
+
+                    while (sqlCmdQueue.Count != 0)
+                    {
+                        SqlCommand sqlCmd = sqlCmdQueue.Dequeue();
+                        sqlCmd.Connection = connString;
+
+                        if (sqlCmd.Transaction == null)
+                        {
+                            sqlCmd.Transaction = sqlTrans;
+                        }
+                        sqlCmd.ExecuteNonQuery();
+                    }
+                    sqlTrans.Commit();
+                }
+                catch (Exception ex)
+                {
+                    sqlTrans.Rollback();
+                    throw ex;
+                }
+                finally
+                {
+                    connString.Close();
+                    connString.Dispose();
+                }
+            }
+        }
+        #endregion
+
+        #region Query1Col1Row
+        public static string Query1Col1Row(string strSQL)
+        {
+            SqlCommand sqlCmd = new SqlCommand(strSQL);
+            return Query1Col1Row(sqlCmd);
+        }
+
+        public static string Query1Col1Row(string strSQL, string strParameterName, string strParameterValue)
+        {
+            SqlCommand sqlCmd = new SqlCommand();
+            sqlCmd.CommandText = strSQL;
+            sqlCmd.Parameters.AddWithValue(strParameterName, strParameterValue);
+            return Query1Col1Row(sqlCmd);
+        }
+
+
+        public static string Query1Col1Row(SqlCommand sqlCmd)
+        {
+            DataTable dt = QuerynColnRow(sqlCmd);
+            {
+                if (dt.Rows.Count == 0)
+                {
+                    return "";
+                }
+                else
+                {
+                    return dt.Rows[0][0].ToString();
+                }
+            }
+        }
+        #endregion
+
+        #region QuerynColnRow
+        public static DataTable QuerynColnRow(string strQuery)
+        {
+            SqlCommand sqlCmd = new SqlCommand();
+            sqlCmd.CommandText = strQuery;
+            return QuerynColnRow(sqlCmd);
+        }
+
+        public static DataTable QuerynColnRow(string strCmdText, string strParameter, string strParameterValue)
+        {
+            SqlCommand sqlCmd = new SqlCommand(strCmdText);
+            sqlCmd.Parameters.AddWithValue(strParameter, strParameterValue);
+            return QuerynColnRow(sqlCmd);
+        }
+
+        public static DataTable QuerynColnRow(SqlCommand sqlCmd)
+        {
+            try
+            {
+                using (SqlConnection connString = new SqlConnection(strConnection))
+                {
+                    connString.Open();
+                    try
+                    {
+                        sqlCmd.Connection = connString;
+                        SqlDataAdapter da = new SqlDataAdapter(sqlCmd);
+                        DataSet ds = new DataSet();
+                        da.Fill(ds, "myTable");
+                        return ds.Tables["myTable"].DefaultView.ToTable();
+                    }
+                    catch (Exception ex2)
+                    {
+                        throw ex2;
+                    }
+                    finally
+                    {
+                        connString.Close();
+                        connString.Dispose();
+                    }
+                }
+            }
+            catch (Exception ex1)
+            {
+                throw ex1;
+            }
+        }
+        #endregion
+
+
+        #endregion
+
+
+        public static string removeLastString(string strSource, string strRemoveString)
+        {
+            if (strSource.Length > 0)
+            {
+                if (strSource.TrimEnd().Length - strSource.LastIndexOf(strRemoveString) == strRemoveString.Length)
+                {
+                    return strSource.Substring(0, strSource.LastIndexOf(strRemoveString));
+                }
+                else
+                {
+                    return strSource;
+                }
+            }
+            else
+            {
+                return strSource;
+            }
+        }
+
+        public void SetValueInControl(Dictionary<string, Control> dicMapping, DataTable dt)
+        {
+            if (dt.Rows[0] != null)
+            {
+                SetValueInControl(dicMapping, dt.Rows[0]);
+            }
+        }
+
+        public void SetValueInControl(Dictionary<string, Control> dicMapping, DataRow dr)
+        {
+            foreach (string strKey in dicMapping.Keys)
+            {
+                Control ctrl = dicMapping[strKey];
+                if (null == ctrl)
+                {
+                    continue;
+                }
+
+                switch (ctrl.GetType().Name)
+                {
+                    case "Label":
+                        ((Label)ctrl).Text = dr[strKey].ToString().Trim();
+                        break;
+                    case "TextBox":
+                        ((TextBox)ctrl).Text = dr[strKey].ToString().Trim();
+                        break;
+                    case "DropDownList":
+                        DropDownList ddlTemp = ((DropDownList)ctrl);
+                        ddlTemp.SelectedIndex = ddlTemp.Items.IndexOf(ddlTemp.Items.FindByValue(dr[strKey].ToString()));
+                        break;
+                    case "RadioButtonList":
+                        RadioButtonList rblTemp = (RadioButtonList)ctrl;
+                        rblTemp.SelectedIndex = rblTemp.Items.IndexOf(rblTemp.Items.FindByValue(dr[strKey].ToString()));
+                        break;
+                    case "HiddenField":
+                        HiddenField hfTemp = (HiddenField)ctrl;
+                        hfTemp.Value = dr[strKey].ToString().Trim();
+                        break;
+                    case "Image":
+                        ((Image)ctrl).ImageUrl = dr[strKey].ToString().Trim();
+                        break;
+                    case "LinkButton":
+                        ((LinkButton)ctrl).Text = dr[strKey].ToString().Trim();
+                        break;
+                    case "CheckBox":
+                        ((CheckBox)ctrl).Checked = bool.Parse(dr[strKey].ToString());
+                        break;
+                    case "RadioButton":
+                        ((RadioButton)ctrl).Checked = bool.Parse(dr[strKey].ToString());
+                        break;
+
+
+                }
+
+            }
+        }
+
+        public Dictionary<string, string> GetValueInControl(Dictionary<string, Control> dicMapping)
+        {
+            Dictionary<string, string> returnDic = new Dictionary<string, string>();
+            foreach (string strKey in dicMapping.Keys)
+            {
+                Control ctrl = dicMapping[strKey];
+                if (null == ctrl)
+                {
+                    returnDic.Add(strKey, "");
+                    continue;
+                }
+                switch (ctrl.GetType().Name)
+                {
+                    case "Label":
+                        returnDic.Add(strKey, ((Label)ctrl).Text);
+                        break;
+                    case "TextBox":
+                        returnDic.Add(strKey, ((TextBox)ctrl).Text);
+                        break;
+                    case "DropDownList":
+                        returnDic.Add(strKey, ((DropDownList)ctrl).SelectedValue);
+                        break;
+                    case "RadioButtonList":
+                        returnDic.Add(strKey, ((RadioButtonList)ctrl).SelectedValue);
+                        break;
+                    case "HiddenField":
+                        returnDic.Add(strKey, ((HiddenField)ctrl).Value);
+                        break;
+                    case "FileUpload":
+                        returnDic.Add(strKey, ((FileUpload)ctrl).FileName);
+                        break;
+                    case "CheckBox":
+                        returnDic.Add(strKey, ((CheckBox)ctrl).Checked ? "true" : "false");
+                        break;
+                    
+                    case "RadioButton":
+                        returnDic.Add(strKey, ((RadioButton)ctrl).Checked ? "true" : "false");
+                        break;
+                }
+            }
+            return returnDic;
+        }
+
+        public Queue<Dictionary<string, string>> GetGridViewControlValue(Dictionary<string, string> dicMapping, GridView gvTmp)
+        {
+            Queue<Dictionary<string, string>> returnQueue = new Queue<Dictionary<string, string>>();
+            Dictionary<string, Control> dicMapTmp = new Dictionary<string, Control>();
+
+            for (int i = 0; i < gvTmp.Rows.Count; i++)
+            {
+                dicMapTmp.Clear();
+                foreach (string strKey in dicMapping.Keys)
+                {
+                    dicMapTmp.Add(strKey, gvTmp.Rows[i].FindControl(dicMapping[strKey]));
+                }
+                returnQueue.Enqueue(GetValueInControl(dicMapTmp));
+            }
+            return returnQueue;
+        }
+
+ 
+ 
+
+    }
+
+    
+}
